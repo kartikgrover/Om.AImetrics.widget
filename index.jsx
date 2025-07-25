@@ -20,39 +20,52 @@ export const render = ({ output }) => {
       fontWeight: 600,
       textTransform: 'uppercase',
       paddingBottom: 4,
-      marginTop: 12,
+      marginTop: 14,
       color: 'rgba(255,255,255,0.8)',
-      letterSpacing: '0.5px'
+      letterSpacing: '0.5px',
+      borderBottom: '1px solid rgba(255,255,255,0.08)',
     }}>{label}</div>
   );
+
+  const getColor = (val) => {
+    if (typeof val === 'string') {
+      if (val.includes('🟢') || val.includes('✅')) return '#4caf50';
+      if (val.includes('🔴') || val.includes('❌')) return '#f44336';
+      if (val.includes('⚠️')) return '#ff9800';
+    }
+    return 'rgba(255,255,255,0.7)';
+  };
 
   const label = (key, value) => (
     <div style={{
       fontSize: 14,
       fontWeight: 400,
       color: 'rgba(255,255,255,0.95)',
-      marginBottom: 3,
-      lineHeight: '1.3'
+      marginBottom: 4,
+      lineHeight: '1.35',
+      display: 'flex',
+      alignItems: 'center'
     }}>
-      <span style={{ display: 'inline-block', width: 140, color: 'rgba(255,255,255,0.8)' }}>{key}</span>
-      <span style={{ fontWeight: 500, color: 'rgba(255,255,255,0.7)' }}>{value}</span>
+      <span style={{ flexBasis: 160, color: 'rgba(255,255,255,0.8)' }}>{key}</span>
+      <span style={{ fontWeight: 600, color: getColor(value), whiteSpace: 'nowrap' }}>{value}</span>
     </div>
   );
 
   return (
     <div style={{
       position: 'absolute',
-      top: 630,
+      top: 5,
       left: 10,
       zIndex: 10,
-      background: 'rgba(0, 0, 0, 0.5)',
+      background: 'linear-gradient(135deg, rgba(30,30,30,0.85) 0%, rgba(10,10,10,0.85) 100%)',
       padding: '8px 0px 8px 10px',
       borderRadius: 5,
       fontFamily: '"Helvetica Neue", Menlo, monospace',
       color: '#fff',
-      width: 700,
+      width: 650,
       backdropFilter: 'blur(10px)',
-      border: '1px solid rgba(255,255,255,0.1)'
+      border: '1px solid rgba(255,255,255,0.15)',
+      boxShadow: '0 4px 12px rgba(0,0,0,0.6)',
     }}>
       <div className="container">
         <div className="widget-title" style={{
@@ -61,7 +74,8 @@ export const render = ({ output }) => {
           fontWeight: 600,
           paddingBottom: 6,
           letterSpacing: '0.8px',
-          color: 'rgba(255,255,255,0.7)'
+          color: 'rgba(255,255,255,0.85)',
+          textShadow: '0 1px 2px rgba(0,0,0,0.8)',
         }}>
           Om.AI Backend Metrics
         </div>
@@ -92,6 +106,10 @@ export const render = ({ output }) => {
             {label('Today', jobs.processingTime.today.totalJobs > 0 ? `${jobs.processingTime.today.totalJobs} (${jobs.processingTime.today.averageSeconds}s)` : '0')}
             {label('Yesterday', jobs.processingTime.yesterday.totalJobs > 0 ? `${jobs.processingTime.yesterday.totalJobs} (${jobs.processingTime.yesterday.averageSeconds}s)` : '0')}
             {label('Last Hour', jobs.processingTime.lastHour.totalJobs > 0 ? `${jobs.processingTime.lastHour.totalJobs} (${jobs.processingTime.lastHour.averageSeconds}s)` : '0')}
+
+            {sectionTitle('Real-time Connections')}
+            {label('Active WebSocket Connections', connections.websocket.activeConnections.toLocaleString())}
+            {label('Subscribed Channels', connections.websocket.subscribedChannels.toLocaleString())}
           </div>
 
           {/* Right Column */}
@@ -125,10 +143,6 @@ export const render = ({ output }) => {
                 )}
               </div>
             ))}
-
-            {sectionTitle('Real-time Connections')}
-            {label('Active WebSocket Connections', connections.websocket.activeConnections.toLocaleString())}
-            {label('Subscribed Channels', connections.websocket.subscribedChannels.toLocaleString())}
           </div>
         </div>
       </div>
