@@ -68,18 +68,6 @@ export const render = ({ output }) => {
       boxShadow: '0 4px 12px rgba(0,0,0,0.6)',
     }}>
       <div className="container">
-        <div className="widget-title" style={{
-          fontSize: 13,
-          textTransform: 'uppercase',
-          fontWeight: 600,
-          paddingBottom: 6,
-          letterSpacing: '0.8px',
-          color: 'rgba(255,255,255,0.85)',
-          textShadow: '0 1px 2px rgba(0,0,0,0.8)',
-        }}>
-          Om.AI Backend Metrics
-        </div>
-
         <div style={{ display: 'flex', gap: 20 }}>
           {/* Left Column */}
           <div style={{ flex: 1 }}>
@@ -108,8 +96,7 @@ export const render = ({ output }) => {
             {label('Last Hour', jobs.processingTime.lastHour.totalJobs > 0 ? `${jobs.processingTime.lastHour.totalJobs} (${jobs.processingTime.lastHour.averageSeconds}s)` : '0')}
 
             {sectionTitle('Real-time Connections')}
-            {label('Active WebSocket Connections', connections.websocket.activeConnections.toLocaleString())}
-            {label('Subscribed Channels', connections.websocket.subscribedChannels.toLocaleString())}
+            {label('Active WS', connections.websocket.activeConnections.toLocaleString())}
           </div>
 
           {/* Right Column */}
