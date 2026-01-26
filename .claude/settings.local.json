@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl -s https://om-ai-backend-4f29d7469ff6.herokuapp.com/astro-metrics)",
+      "Bash(curl -s https://om-ai-backend-4f29d7469ff6.herokuapp.com/metrics)",
+      "Bash(node -c:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

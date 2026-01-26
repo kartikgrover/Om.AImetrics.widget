@@ -1,4 +1,4 @@
-export const refreshFrequency = 10000; // 10 sec
+export const refreshFrequency = 60000; // 60 sec
 
 export const command = "curl -s https://om-ai-backend-4f29d7469ff6.herokuapp.com/metrics";
 
@@ -12,7 +12,7 @@ export const render = ({ output }) => {
     return <div style={{ color: 'red' }}>Error parsing JSON</div>;
   }
 
-  const { status, timestamp, services, jobs, connections } = data;
+  const { status, timestamp, services, jobs, connections, subscriptions } = data;
 
   const sectionTitle = (label) => (
     <div style={{
@@ -130,6 +130,15 @@ export const render = ({ output }) => {
                 )}
               </div>
             ))}
+
+            {subscriptions && (
+              <div>
+                {sectionTitle('Subscriptions')}
+                {label('Active', `${subscriptions.active} / ${subscriptions.total}`)}
+                {label('Cancelled', subscriptions.cancelled.toLocaleString())}
+                {subscriptions.billingIssues > 0 && label('Billing Issues', `⚠️ ${subscriptions.billingIssues}`)}
+              </div>
+            )}
           </div>
         </div>
       </div>
