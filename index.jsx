@@ -176,21 +176,28 @@ export const render = ({ output }) => {
           <div style={{ flex: 1 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               {sectionTitle(`P&L (${days?.[0]?.date || ''})`)}
-              <button
-                onClick={() => {
+              <span
+                onClick={(e) => {
+                  const el = e.currentTarget;
+                  el.style.transition = 'transform 0.6s ease';
+                  el.style.transform = 'rotate(360deg)';
+                  el.style.color = '#4caf50';
                   run('touch /tmp/omai-pnl-force');
+                  setTimeout(() => {
+                    el.style.transition = 'none';
+                    el.style.transform = 'rotate(0deg)';
+                    el.style.color = 'rgba(255,255,255,0.5)';
+                  }, 700);
                 }}
                 style={{
-                  background: 'rgba(255,255,255,0.1)',
-                  border: '1px solid rgba(255,255,255,0.2)',
-                  borderRadius: 4,
-                  color: 'rgba(255,255,255,0.7)',
-                  fontSize: 11,
-                  padding: '2px 8px',
+                  color: 'rgba(255,255,255,0.5)',
+                  fontSize: 20,
                   cursor: 'pointer',
                   marginTop: 14,
+                  display: 'inline-block',
                 }}
-              >Refresh P&L</button>
+                title="Refresh P&L"
+              >&#x21bb;</span>
             </div>
             {pnl.computedAt && label('Computed', new Date(pnl.computedAt).toLocaleString())}
             {label('Gross Revenue', `₹${today.grossRevenue?.toLocaleString() || '0'}`)}
