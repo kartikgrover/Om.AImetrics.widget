@@ -1,22 +1,36 @@
+import { run } from 'uebersicht';
+
 export const refreshFrequency = 60000; // 60 sec
 
 const API_KEY = "53636efb6ceb01864487ef21196cbc441e3a4aefca2b372d6dc68499d9dbbd94";
 const BASE = "https://om-ai-backend-4f29d7469ff6.herokuapp.com";
 
 const PNL_CACHE = "/tmp/omai-pnl-cache.json";
-const PNL_MAX_AGE = 3600; // 1 hour in seconds
+const PNL_FORCE = "/tmp/omai-pnl-force";
 
 export const command = `bash -c '
   echo "---METRICS---"
   curl -s -H "x-metrics-key: ${API_KEY}" "${BASE}/metrics"
   echo "---PNL---"
-  NOW=$(date +%s)
-  if [ -f ${PNL_CACHE} ]; then
-    AGE=$(( NOW - $(stat -f %m ${PNL_CACHE}) ))
-  else
-    AGE=999999
+  FORCE=0
+  if [ -f ${PNL_FORCE} ]; then
+    rm -f ${PNL_FORCE}
+    FORCE=1
   fi
-  if [ $AGE -ge ${PNL_MAX_AGE} ]; then
+  NEED_REFRESH=0
+  if [ ! -f ${PNL_CACHE} ]; then
+    NEED_REFRESH=1
+  elif [ \$FORCE -eq 1 ]; then
+    NEED_REFRESH=1
+  else
+    LAST_MOD=\$(stat -f %m ${PNL_CACHE})
+    TODAY_CST=\$(TZ=America/Chicago date +%Y-%m-%d)
+    MIDNIGHT_CST=\$(TZ=America/Chicago date -j -f "%Y-%m-%d %H:%M:%S" "\$TODAY_CST 00:00:00" +%s)
+    if [ \$LAST_MOD -lt \$MIDNIGHT_CST ]; then
+      NEED_REFRESH=1
+    fi
+  fi
+  if [ \$NEED_REFRESH -eq 1 ]; then
     curl -s -H "x-metrics-key: ${API_KEY}" "${BASE}/api/metrics/daily-pnl?days=1" -o ${PNL_CACHE}
   fi
   cat ${PNL_CACHE}
@@ -160,13 +174,29 @@ export const render = ({ output }) => {
 
           {/* Right Column — P&L */}
           <div style={{ flex: 1 }}>
-            {sectionTitle(`P&L (${days?.[0]?.date || ''})`)}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              {sectionTitle(`P&L (${days?.[0]?.date || ''})`)}
+              <button
+                onClick={() => {
+                  run('touch /tmp/omai-pnl-force');
+                }}
+                style={{
+                  background: 'rgba(255,255,255,0.1)',
+                  border: '1px solid rgba(255,255,255,0.2)',
+                  borderRadius: 4,
+                  color: 'rgba(255,255,255,0.7)',
+                  fontSize: 11,
+                  padding: '2px 8px',
+                  cursor: 'pointer',
+                  marginTop: 14,
+                }}
+              >Refresh P&L</button>
+            </div>
             {pnl.computedAt && label('Computed', new Date(pnl.computedAt).toLocaleString())}
-            {label('Purchases', today.totalPurchases?.toLocaleString() || '0')}
             {label('Gross Revenue', `₹${today.grossRevenue?.toLocaleString() || '0'}`)}
             {label('Store Fees', `₹${today.storeFees?.toLocaleString() || '0'}`)}
             {label('Net Revenue', `₹${today.netRevenue?.toLocaleString() || '0'}`)}
-            {label('Ad Spend', `$${today.metaAdSpend?.toLocaleString() || '0'}`)}
+            {label('Ad Spend', `$${today.metaAdSpend?.toLocaleString() || '0'} (₹${today.metaAdSpendInr?.toLocaleString() || '0'})`)}
             <div style={{
               fontSize: 14, fontWeight: 400, color: 'rgba(255,255,255,0.95)',
               marginBottom: 4, lineHeight: '1.35', display: 'flex', alignItems: 'center'
@@ -177,17 +207,20 @@ export const render = ({ output }) => {
               </span>
             </div>
 
-            {sectionTitle('Ads Performance')}
-            {label('Impressions', today.metaImpressions?.toLocaleString() || '0')}
-            {label('Clicks', today.metaClicks?.toLocaleString() || '0')}
-            {today.metaImpressions > 0 && label('CTR', `${((today.metaClicks / today.metaImpressions) * 100).toFixed(2)}%`)}
+            {sectionTitle('Purchases')}
+            {label('New Purchases', today.totalPurchases?.toLocaleString() || '0')}
+            {label('Renewals', `🟢 ${today.totalRenewals || 0}`)}
+            {today.freeTrials > 0 && label('Free Trials', today.freeTrials.toLocaleString())}
+            {today.introOffers > 0 && label('Intro Offers', today.introOffers.toLocaleString())}
 
             {sectionTitle('Revenue by Platform')}
             {label('iOS', `${today.byPlatform?.ios?.count || 0} sales — ₹${today.byPlatform?.ios?.gross?.toLocaleString() || '0'}`)}
             {label('Android', `${today.byPlatform?.android?.count || 0} sales — ₹${today.byPlatform?.android?.gross?.toLocaleString() || '0'}`)}
 
-            {today.introOffers > 0 && label('Intro Offers', today.introOffers.toLocaleString())}
-            {today.freeTrials > 0 && label('Free Trials', today.freeTrials.toLocaleString())}
+            {sectionTitle('Ads Performance')}
+            {label('Impressions', today.metaImpressions?.toLocaleString() || '0')}
+            {label('Clicks', today.metaClicks?.toLocaleString() || '0')}
+            {today.metaImpressions > 0 && label('CTR', `${((today.metaClicks / today.metaImpressions) * 100).toFixed(2)}%`)}
           </div>
         </div>
       </div>
