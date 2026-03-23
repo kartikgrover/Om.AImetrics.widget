@@ -51,23 +51,21 @@ export const render = ({ output }) => {
 
   const { status, timestamp, services, jobs, connections } = metrics;
 
-  const sh = pnl.subscriberHealth || { total: 0, active: 0, activeButCancelling: 0, expired: 0, freeTrial: 0, introOffer: 0, byPlatform: { ios: { active: 0, total: 0 }, android: { active: 0, total: 0 } } };
+  const sh = pnl.subscriberHealth || { total: 0, active: 0, activeButCancelling: 0, expired: 0, freeTrial: 0, introOffer: 0, onHold: 0, inGracePeriod: 0, paused: 0, byPlatform: { ios: { active: 0, total: 0 }, android: { active: 0, total: 0 } } };
   const days = pnl.days || [];
   const androidVerification = pnl.androidVerification || { totalAndroidChecked: 0, verifiedViaPlayApi: 0, playApiFallbacks: 0 };
   const today = days?.[0]?.summary || {};
 
-  const sectionTitle = (label) => (
-    <div style={{
-      fontSize: 12,
-      fontWeight: 600,
-      textTransform: 'uppercase',
-      paddingBottom: 4,
-      marginTop: 14,
-      color: 'rgba(255,255,255,0.8)',
-      letterSpacing: '0.5px',
-      borderBottom: '1px solid rgba(255,255,255,0.08)',
-    }}>{label}</div>
-  );
+  /* ── helpers ── */
+  const statusColor = (val) => {
+    if (typeof val === 'string') {
+      if (/good|healthy|connected|ready|active/i.test(val)) return '#4caf50';
+      if (/error|fail|unhealthy|disconnected/i.test(val)) return '#f44336';
+      if (/warn|cancelling/i.test(val)) return '#ff9800';
+    }
+    if (typeof val === 'number') return '#fff';
+    return 'rgba(255,255,255,0.85)';
+  };
 
   const getColor = (val) => {
     if (typeof val === 'string') {
@@ -75,21 +73,46 @@ export const render = ({ output }) => {
       if (val.includes('🔴') || val.includes('❌')) return '#f44336';
       if (val.includes('⚠️')) return '#ff9800';
     }
-    return 'rgba(255,255,255,0.7)';
+    return 'rgba(255,255,255,0.85)';
   };
 
-  const label = (key, value) => (
+  const sectionTitle = (text) => (
     <div style={{
-      fontSize: 14,
-      fontWeight: 400,
-      color: 'rgba(255,255,255,0.95)',
+      fontSize: 12,
+      fontWeight: 600,
+      textTransform: 'uppercase',
+      letterSpacing: '0.5px',
+      color: 'rgba(255,255,255,0.8)',
+      marginTop: 14,
       marginBottom: 4,
-      lineHeight: '1.35',
+      paddingBottom: 4,
+      borderBottom: '1px solid rgba(255,255,255,0.08)',
+    }}>{text}</div>
+  );
+
+  const row = (key, value, opts = {}) => (
+    <div style={{
       display: 'flex',
-      alignItems: 'center'
+      justifyContent: 'space-between',
+      alignItems: 'baseline',
+      marginBottom: 2,
+      lineHeight: '1.3',
     }}>
-      <span style={{ flexBasis: 160, color: 'rgba(255,255,255,0.8)' }}>{key}</span>
-      <span style={{ fontWeight: 600, color: getColor(value), whiteSpace: 'nowrap' }}>{String(value).replace(/[🟢🔴✅❌⚠️]/g, '').trim()}</span>
+      <span style={{
+        fontSize: 14,
+        color: 'rgba(255,255,255,0.8)',
+        flexShrink: 0,
+        marginRight: 8,
+      }}>{key}</span>
+      <span style={{
+        fontSize: 14,
+        fontWeight: 600,
+        color: opts.color || getColor(value),
+        whiteSpace: 'nowrap',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        textAlign: 'right',
+      }}>{String(value).replace(/[🟢🔴✅❌⚠️]/g, '').trim()}</span>
     </div>
   );
 
@@ -101,134 +124,143 @@ export const render = ({ output }) => {
       top: 5,
       left: 10,
       zIndex: 10,
-      background: 'linear-gradient(135deg, rgba(30,30,30,0.85) 0%, rgba(10,10,10,0.85) 100%)',
-      padding: '8px 25px 8px 10px',
-      borderRadius: 5,
-      fontFamily: '"Helvetica Neue", Menlo, monospace',
+      background: 'linear-gradient(135deg, rgba(20,20,24,0.88) 0%, rgba(8,8,12,0.92) 100%)',
+      padding: '10px 12px',
+      borderRadius: 8,
+      fontFamily: 'Menlo, "SF Mono", monospace',
       color: '#fff',
-      width: 700,
-      backdropFilter: 'blur(10px)',
-      border: '1px solid rgba(255,255,255,0.15)',
-      boxShadow: '0 4px 12px rgba(0,0,0,0.6)',
+      width: 820,
+      backdropFilter: 'blur(12px)',
+      border: '1px solid rgba(255,255,255,0.1)',
+      boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
     }}>
-      <div className="container">
-        <div style={{ display: 'flex', gap: 20 }}>
-          {/* Left Column — System */}
-          <div style={{ flex: 1 }}>
-            {label('System Status', status === 'healthy' ? '🟢 Healthy' : '🔴 Unhealthy')}
-            {label('Last Updated', new Date(timestamp).toLocaleString())}
+      {/* ── 3-column CSS Grid ── */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+        gap: '0 16px',
+      }}>
 
-            {sectionTitle('Infrastructure')}
-            {label('Redis Database', services.redis ? '✅ Connected' : '❌ Disconnected')}
-            {label('Job Queue Status', services.queue === 'ready' ? '✅ Ready' : `⚠️ ${services.queue}`)}
-            {label('Redis Connection', connections.redis.status === 'ready' ? '✅ Ready' : `⚠️ ${connections.redis.status}`)}
+        {/* ═══ Column 1: System & Jobs ═══ */}
+        <div style={{ minWidth: 0 }}>
+          {row('System', status === 'healthy' ? '🟢 Healthy' : '🔴 Unhealthy')}
+          {row('Updated', new Date(timestamp).toLocaleString())}
 
-            {sectionTitle('Job Overview')}
-            {label('Total Jobs Processed', jobs.total.toLocaleString())}
-            {label('Successfully Completed', jobs.completed.toLocaleString())}
-            {label('Failed Jobs', jobs.failed.toLocaleString())}
-            {label('Success Rate', `${jobs.successRate}%`)}
+          {sectionTitle('Infrastructure')}
+          {row('Redis DB', services.redis ? '✅ Connected' : '❌ Down')}
+          {row('Job Queue', services.queue === 'ready' ? '✅ Ready' : `⚠️ ${services.queue}`)}
+          {row('Redis Conn', connections.redis.status === 'ready' ? '✅ Ready' : `⚠️ ${connections.redis.status}`)}
 
-            {sectionTitle('Current Queue')}
-            {label('Pending Jobs', jobs.waiting.toLocaleString())}
-            {label('Currently Active', jobs.active.toLocaleString())}
+          {sectionTitle('Jobs')}
+          {row('Total', jobs.total.toLocaleString())}
+          {row('Completed', jobs.completed.toLocaleString())}
+          {row('Failed', jobs.failed.toLocaleString())}
+          {row('Success', `${jobs.successRate}%`)}
 
-            {sectionTitle('Performance')}
-            {label('All-Time', jobs.processingTime.allTime.totalJobs > 0 ? `${jobs.processingTime.allTime.totalJobs} (${jobs.processingTime.allTime.averageSeconds}s)` : '0')}
-            {label('Today', jobs.processingTime.today.totalJobs > 0 ? `${jobs.processingTime.today.totalJobs} (${jobs.processingTime.today.averageSeconds}s)` : '0')}
-            {label('Last Hour', jobs.processingTime.lastHour.totalJobs > 0 ? `${jobs.processingTime.lastHour.totalJobs} (${jobs.processingTime.lastHour.averageSeconds}s)` : '0')}
+          {sectionTitle('Queue')}
+          {row('Pending', jobs.waiting.toLocaleString())}
+          {row('Active', jobs.active.toLocaleString())}
 
-            {sectionTitle('Real-time')}
-            {label('Active WS', connections.websocket.activeConnections.toLocaleString())}
+          {sectionTitle('Performance')}
+          {row('All-Time', jobs.processingTime.allTime.totalJobs > 0 ? `${jobs.processingTime.allTime.totalJobs.toLocaleString()} (${jobs.processingTime.allTime.averageSeconds}s)` : '0')}
+          {row('Today', jobs.processingTime.today.totalJobs > 0 ? `${jobs.processingTime.today.totalJobs} (${jobs.processingTime.today.averageSeconds}s)` : '0')}
+          {row('Last Hour', jobs.processingTime.lastHour.totalJobs > 0 ? `${jobs.processingTime.lastHour.totalJobs} (${jobs.processingTime.lastHour.averageSeconds}s)` : '0')}
+
+          {sectionTitle('Real-time')}
+          {row('Active WS', connections.websocket.activeConnections.toLocaleString())}
+        </div>
+
+        {/* ═══ Column 2: Subscribers & Job Types ═══ */}
+        <div style={{ minWidth: 0 }}>
+          {sectionTitle('Subscriber Health')}
+          {row('Total', sh.total.toLocaleString())}
+          {row('Active', `🟢 ${sh.active}`)}
+          {row('Cancelling', sh.activeButCancelling > 0 ? `⚠️ ${sh.activeButCancelling}` : '0')}
+          {row('Expired', sh.expired.toLocaleString())}
+          {row('Free Trial', sh.freeTrial.toLocaleString())}
+          {row('Intro Offer', sh.introOffer.toLocaleString())}
+          {sh.onHold > 0 && row('On Hold', `⚠️ ${sh.onHold}`)}
+          {sh.inGracePeriod > 0 && row('Grace Period', `⚠️ ${sh.inGracePeriod}`)}
+          {sh.paused > 0 && row('Paused', sh.paused.toLocaleString())}
+
+          {sectionTitle('By Platform')}
+          {row('iOS', `${sh.byPlatform.ios.active} active / ${sh.byPlatform.ios.total} total`)}
+          {row('Android', `${sh.byPlatform.android.active} active / ${sh.byPlatform.android.total} total`)}
+
+          {sh.byMonth && Object.keys(sh.byMonth).length > 0 && sectionTitle('Retention')}
+          {sh.byMonth && Object.keys(sh.byMonth)
+            .sort((a, b) => parseInt(a.split(' ')[1]) - parseInt(b.split(' ')[1]))
+            .map(k => row(k, `${sh.byMonth[k]} subs`))}
+
+          {sectionTitle('Job Types — Today')}
+          {Object.entries(jobs.processingTime.byType).map(([type, data]) => (
+            row(
+              type.charAt(0).toUpperCase() + type.slice(1),
+              data.today.totalJobs > 0 ? `${data.today.totalJobs} (${data.today.averageSeconds}s)` : '0'
+            )
+          ))}
+        </div>
+
+        {/* ═══ Column 3: P&L & Ads ═══ */}
+        <div style={{ minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            {sectionTitle(`P&L (${days?.[0]?.date || ''})`)}
+            <span
+              onClick={(e) => {
+                const el = e.currentTarget;
+                el.style.transition = 'transform 0.6s ease';
+                el.style.transform = 'rotate(360deg)';
+                el.style.color = '#4caf50';
+                run('touch /tmp/omai-pnl-force');
+                setTimeout(() => {
+                  el.style.transition = 'none';
+                  el.style.transform = 'rotate(0deg)';
+                  el.style.color = 'rgba(255,255,255,0.35)';
+                }, 700);
+              }}
+              style={{
+                color: 'rgba(255,255,255,0.35)',
+                fontSize: 16,
+                cursor: 'pointer',
+                marginTop: 10,
+                display: 'inline-block',
+              }}
+              title="Refresh P&L"
+            >&#x21bb;</span>
           </div>
-
-          {/* Middle Column — Subscriber Health */}
-          <div style={{ flex: 1 }}>
-            {sectionTitle('Subscriber Health')}
-            {label('Total', sh.total.toLocaleString())}
-            {label('Active', `🟢 ${sh.active}`)}
-            {label('Cancelling', sh.activeButCancelling > 0 ? `⚠️ ${sh.activeButCancelling}` : '0')}
-            {label('Expired', sh.expired.toLocaleString())}
-            {label('Free Trial', sh.freeTrial.toLocaleString())}
-            {label('Intro Offer', sh.introOffer.toLocaleString())}
-
-            {sectionTitle('By Platform')}
-            {label('iOS', `${sh.byPlatform.ios.active} active / ${sh.byPlatform.ios.total} total`)}
-            {label('Android', `${sh.byPlatform.android.active} active / ${sh.byPlatform.android.total} total`)}
-
-            {sectionTitle('Android Verification')}
-            {label('Checked', androidVerification.totalAndroidChecked.toLocaleString())}
-            {label('Verified (Play)', `✅ ${androidVerification.verifiedViaPlayApi}`)}
-            {label('Fallbacks', androidVerification.playApiFallbacks > 0 ? `⚠️ ${androidVerification.playApiFallbacks}` : '0')}
-
-            {sectionTitle('Job Types - Today')}
-            {Object.entries(jobs.processingTime.byType).map(([type, data]) => (
-              <div key={type} style={{ marginBottom: 2 }}>
-                {label(
-                  type.charAt(0).toUpperCase() + type.slice(1),
-                  data.today.totalJobs > 0 ? `${data.today.totalJobs} (${data.today.averageSeconds}s)` : '0'
-                )}
-              </div>
-            ))}
+          {pnl.computedAt && row('Computed', new Date(pnl.computedAt).toLocaleString())}
+          {row('Gross Rev', `₹${today.grossRevenue?.toLocaleString() || '0'}`)}
+          {row('Store Fees', `₹${today.storeFees?.toLocaleString() || '0'}`)}
+          {row('Net Rev', `₹${today.netRevenue?.toLocaleString() || '0'}`)}
+          {row('Ad Spend', `$${today.metaAdSpend?.toLocaleString() || '0'} (₹${today.metaAdSpendInr?.toLocaleString() || '0'})`)}
+          {row('OpenAI', `$${today.openaiCostUsd?.toLocaleString() || '0'} (₹${today.openaiCostInr?.toLocaleString() || '0'})`)}
+          <div style={{
+            display: 'flex', justifyContent: 'space-between', alignItems: 'baseline',
+            marginBottom: 2, lineHeight: '1.3',
+          }}>
+            <span style={{ fontSize: 14, color: 'rgba(255,255,255,0.8)', marginRight: 8 }}>Profit</span>
+            <span style={{ fontSize: 14, fontWeight: 700, color: profitColor }}>
+              ₹{today.profit?.toLocaleString() || '0'}
+            </span>
           </div>
+          {today.metaAdSpendInr > 0 && row('ROAS', `${(today.grossRevenue / today.metaAdSpendInr).toFixed(2)}x`)}
 
-          {/* Right Column — P&L */}
-          <div style={{ flex: 1 }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              {sectionTitle(`P&L (${days?.[0]?.date || ''})`)}
-              <span
-                onClick={(e) => {
-                  const el = e.currentTarget;
-                  el.style.transition = 'transform 0.6s ease';
-                  el.style.transform = 'rotate(360deg)';
-                  el.style.color = '#4caf50';
-                  run('touch /tmp/omai-pnl-force');
-                  setTimeout(() => {
-                    el.style.transition = 'none';
-                    el.style.transform = 'rotate(0deg)';
-                    el.style.color = 'rgba(255,255,255,0.5)';
-                  }, 700);
-                }}
-                style={{
-                  color: 'rgba(255,255,255,0.5)',
-                  fontSize: 20,
-                  cursor: 'pointer',
-                  marginTop: 14,
-                  display: 'inline-block',
-                }}
-                title="Refresh P&L"
-              >&#x21bb;</span>
-            </div>
-            {pnl.computedAt && label('Computed', new Date(pnl.computedAt).toLocaleString())}
-            {label('Gross Revenue', `₹${today.grossRevenue?.toLocaleString() || '0'}`)}
-            {label('Store Fees', `₹${today.storeFees?.toLocaleString() || '0'}`)}
-            {label('Net Revenue', `₹${today.netRevenue?.toLocaleString() || '0'}`)}
-            {label('Ad Spend', `$${today.metaAdSpend?.toLocaleString() || '0'} (₹${today.metaAdSpendInr?.toLocaleString() || '0'})`)}
-            <div style={{
-              fontSize: 14, fontWeight: 400, color: 'rgba(255,255,255,0.95)',
-              marginBottom: 4, lineHeight: '1.35', display: 'flex', alignItems: 'center'
-            }}>
-              <span style={{ flexBasis: 160, color: 'rgba(255,255,255,0.8)' }}>Profit</span>
-              <span style={{ fontWeight: 700, color: profitColor, whiteSpace: 'nowrap' }}>
-                ₹{today.profit?.toLocaleString() || '0'}
-              </span>
-            </div>
+          {sectionTitle('Purchases')}
+          {row('New', today.totalPurchases?.toLocaleString() || '0')}
+          {row('Renewals', `🟢 ${today.totalRenewals || 0}`)}
+          {today.totalOneTimePackages > 0 && row('Q-Packs', today.totalOneTimePackages.toLocaleString())}
+          {today.winbackPurchases > 0 && row('Winbacks', today.winbackPurchases.toLocaleString())}
+          {today.freeTrials > 0 && row('Free Trials', today.freeTrials.toLocaleString())}
+          {today.introOffers > 0 && row('Intro Offers', today.introOffers.toLocaleString())}
 
-            {sectionTitle('Purchases')}
-            {label('New Purchases', today.totalPurchases?.toLocaleString() || '0')}
-            {label('Renewals', `🟢 ${today.totalRenewals || 0}`)}
-            {today.freeTrials > 0 && label('Free Trials', today.freeTrials.toLocaleString())}
-            {today.introOffers > 0 && label('Intro Offers', today.introOffers.toLocaleString())}
+          {sectionTitle('Revenue by Platform')}
+          {row('iOS', `${today.byPlatform?.ios?.count || 0} sales — ₹${today.byPlatform?.ios?.gross?.toLocaleString() || '0'}`)}
+          {row('Android', `${today.byPlatform?.android?.count || 0} sales — ₹${today.byPlatform?.android?.gross?.toLocaleString() || '0'}`)}
 
-            {sectionTitle('Revenue by Platform')}
-            {label('iOS', `${today.byPlatform?.ios?.count || 0} sales — ₹${today.byPlatform?.ios?.gross?.toLocaleString() || '0'}`)}
-            {label('Android', `${today.byPlatform?.android?.count || 0} sales — ₹${today.byPlatform?.android?.gross?.toLocaleString() || '0'}`)}
-
-            {sectionTitle('Ads Performance')}
-            {label('Impressions', today.metaImpressions?.toLocaleString() || '0')}
-            {label('Clicks', today.metaClicks?.toLocaleString() || '0')}
-            {today.metaImpressions > 0 && label('CTR', `${((today.metaClicks / today.metaImpressions) * 100).toFixed(2)}%`)}
-          </div>
+          {sectionTitle('Ads')}
+          {row('Impressions', today.metaImpressions?.toLocaleString() || '0')}
+          {row('Clicks', today.metaClicks?.toLocaleString() || '0')}
+          {today.metaImpressions > 0 && row('CTR', `${((today.metaClicks / today.metaImpressions) * 100).toFixed(2)}%`)}
         </div>
       </div>
     </div>
